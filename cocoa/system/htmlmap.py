@@ -5,36 +5,29 @@ import html
 import math
 
 from cocoa.system.models import EdgeKind, NodeKind, Provenance, SystemGraph
+from cocoa.system.topology import service_rpc_edges
 
 _COLORS = {Provenance.DERIVED_STATIC: "#2563eb", Provenance.INFERRED: "#d97706"}
 
 
 def render_html(graph: SystemGraph) -> str:
     services = [n for n in graph.nodes if n.kind in (NodeKind.SERVICE, NodeKind.DATASTORE)]
-    hosts = {e.target: e.source for e in graph.edges if e.kind == EdgeKind.HOSTS}
     fn_svc = {n.id: f"svc:{n.service}" for n in graph.nodes
               if n.kind == NodeKind.FUNCTION and n.service}
-    handler_svc: dict[str, tuple[str, Provenance]] = {
-        e.source: (fn_svc.get(e.target, ""), e.provenance)
-        for e in graph.edges if e.kind == EdgeKind.HANDLES}
     links: dict[tuple[str, str], Provenance] = {}
+    for t in service_rpc_edges(graph):
+        pair = (f"svc:{t.client}", f"svc:{t.server}")
+        prev = links.get(pair)
+        links[pair] = t.provenance if prev is None else (
+            Provenance.INFERRED if Provenance.INFERRED in (prev, t.provenance) else prev)
     for e in graph.edges:
-        prov = e.provenance
-        if e.kind == EdgeKind.RPC_CALLS:
-            host = hosts.get(e.target, "")
-            if not host:
-                host, h_prov = handler_svc.get(e.target, ("", None))
-                if host and Provenance.INFERRED in (prov, h_prov):
-                    prov = Provenance.INFERRED  # compound across the fallback hop
-            pair = (fn_svc.get(e.source, ""), host)
-        elif e.kind in (EdgeKind.READS, EdgeKind.WRITES):
-            pair = (fn_svc.get(e.source, ""), e.target)
-        else:
+        if e.kind not in (EdgeKind.READS, EdgeKind.WRITES):
             continue
+        pair = (fn_svc.get(e.source, ""), e.target)
         if all(pair) and pair[0] != pair[1]:
             prev = links.get(pair)
-            links[pair] = prov if prev is None else (
-                Provenance.INFERRED if Provenance.INFERRED in (prev, prov) else prev)
+            links[pair] = e.provenance if prev is None else (
+                Provenance.INFERRED if Provenance.INFERRED in (prev, e.provenance) else prev)
 
     cx, cy, r = 480, 360, 280
     pos = {}
