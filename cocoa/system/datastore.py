@@ -10,20 +10,22 @@ from cocoa.system.facts import ServiceFacts
 from cocoa.system.models import Edge, EdgeKind, Node, NodeKind, Provenance
 from cocoa.system.wiring import Workload
 
-_REDIS_TOKENS = ("redis", "jedis", "ioredis", "stackexchange.redis")
+_REDIS_EVIDENCE = re.compile(
+    r"(?<![a-z0-9])(?:redis|jedis|ioredis|stackexchange\.redis)"
+    r"(?:template|client|pool|conn|connection|db)?(?![a-z0-9])"
+)
 _REDIS_READS = {
     "get", "hget", "hgetall", "mget", "lrange", "smembers", "exists",
     "scan", "keys", "ttl", "zrange", "sismember", "llen",
 }
-_REDIS_WRITES = {
-    "set", "setex", "hset", "hmset", "del", "delete", "expire", "lpush",
-    "rpush", "sadd", "srem", "incr", "decr", "zadd", "flushdb",
-}
+# No explicit writes set: classification is reads-set-or-conservative-WRITES,
+# i.e. anything not a known read command is treated as a write.
 _ADDR = re.compile(r"^([a-z0-9][a-z0-9.-]*):\d+$")
 _STR_LIT = re.compile(r'"([^"]+)"|\'([^\']+)\'')
 _SQL_HINT = re.compile(r"(?is)\b(select\s.+?\sfrom\s|insert\s+into\s|update\s+\w+\s+set\s|delete\s+from\s)")
 _TABLENAME = re.compile(r"__tablename__\s*=\s*[\"'](\w+)[\"']")
 _JPA_TABLE = re.compile(r"@Table\s*\(\s*name\s*=\s*[\"'](\w+)[\"']")
+_TABLE_STOPWORDS = {"the", "your", "a", "an", "my", "our", "their", "this", "that", "it", "us", "them"}
 
 
 def _redis_host(service: str, workloads: list[Workload]) -> tuple[str, bool]:
@@ -31,17 +33,31 @@ def _redis_host(service: str, workloads: list[Workload]) -> tuple[str, bool]:
         if w.name == service:
             for var, val in w.env.items():
                 m = _ADDR.match(val.strip())
-                if "REDIS" in var.upper() and m:
+                if m and "REDIS" in var.upper().split("_"):
                     return m.group(1), True
     return service, False
 
 
 def _first_literal(args: list[str]) -> str | None:
-    for a in args:
-        m = _STR_LIT.search(a)
-        if m:
-            return m.group(1) or m.group(2)
+    """Only args[0] can be a key literal; later positional args (TTLs, values,
+    etc.) are never keys and must not be fabricated into key nodes."""
+    if not args:
+        return None
+    m = _STR_LIT.search(args[0])
+    if m:
+        return m.group(1) or m.group(2)
     return None
+
+
+def _plausible_select(tree: exp.Expression) -> bool:
+    """Reject prose that parses as SELECT: require structural SQL signals."""
+    exprs = tree.expressions or []
+    structural = (
+        len(exprs) > 1
+        or any(isinstance(e, (exp.Star, exp.Func)) for e in exprs)
+        or any(tree.args.get(k) for k in ("where", "joins", "group", "order", "limit"))
+    )
+    return structural
 
 
 def _sql_tables(text: str) -> list[tuple[str, bool]]:
@@ -58,8 +74,10 @@ def _sql_tables(text: str) -> list[tuple[str, bool]]:
         if tree is None:
             continue
         is_read = isinstance(tree, exp.Select)
+        if is_read and not _plausible_select(tree):
+            continue
         for t in tree.find_all(exp.Table):
-            if t.name:
+            if t.name and t.name.lower() not in _TABLE_STOPWORDS:
                 out.append((t.name, is_read))
     return out
 
@@ -69,6 +87,7 @@ def extract_data_access(
 ) -> tuple[list[Node], list[Edge]]:
     nodes: dict[str, Node] = {}
     edges: list[Edge] = []
+    seen_orm: set[tuple[str, str]] = set()
 
     def add_node(node: Node) -> None:
         nodes.setdefault(node.id, node)
@@ -85,7 +104,7 @@ def extract_data_access(
         # --- Redis via call sites
         for cs in sf.call_sites:
             evidence = f"{cs.receiver} {cs.receiver_type} {cs.callee_hint}".lower()
-            if not any(tok in evidence for tok in _REDIS_TOKENS):
+            if not _REDIS_EVIDENCE.search(evidence):
                 continue
             cmd = cs.method_name.lower()
             kind = EdgeKind.READS if cmd in _REDIS_READS else EdgeKind.WRITES
@@ -114,6 +133,13 @@ def extract_data_access(
                                 {EdgeKind.READS if is_read else EdgeKind.WRITES})
             for rx in (_TABLENAME, _JPA_TABLE):
                 for m in rx.finditer(blob + "\n" + "\n".join(fn.annotations)):
-                    add_table_edges(fid, fn.file, m.group(1),
+                    table = m.group(1)
+                    key = (service, table)
+                    if key in seen_orm:
+                        # Upstream flattens class-level @Table/__tablename__ onto every
+                        # method's FunctionFact; only the first declaring function emits.
+                        continue
+                    seen_orm.add(key)
+                    add_table_edges(fid, fn.file, table,
                                     {EdgeKind.READS, EdgeKind.WRITES}, via="orm")
     return list(nodes.values()), edges
