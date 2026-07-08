@@ -9,7 +9,7 @@ description: "Use when a COCOA system graph needs to be built or refreshed — n
 
 ## Checklist
 
-1. **Build:** `cocoa map -p <project-root>` (or the `build_graph` MCP tool with
+1. **Build:** `cocoa map -p <project-root>` (or the `build_graph_tool` MCP tool with
    `rebuild=true` when refreshing). First Java analysis downloads a JDK into the
    project cache — expect minutes once per project.
 2. **Read the skips — mandatory.** The map output and `.cocoa/SYSTEM_REPORT.md` list

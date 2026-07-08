@@ -27,8 +27,9 @@ An ambiguous suffix resolves to nothing (empty result, not a guess) — qualify 
 - `impacted[*].depth` — hops along the STRONGEST available path (an RPC boundary
   counts as one hop). `provenance` is that path's compounded provenance.
 - Cross-service propagation is automatic: handlers hop to their RPC's clients.
-- `by_service` is the complete per-service tally even when the detail list is
-  truncated (`truncated=true` → cite `total_impacted`).
+- Via the MCP tool, `by_service` is the complete per-service tally even when the
+  detail list is truncated (`truncated=true` → cite `total_impacted`); the CLI
+  `--json` output is never truncated.
 - Empty result for a real node usually means nothing calls it (check
   `DECLARED-UNUSED` on the RPC) — or coverage gaps; check the graph's skips.
 

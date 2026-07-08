@@ -51,11 +51,19 @@ def test_using_cocoa_names_the_other_skills():
         assert ref in text
 
 
-def test_using_cocoa_names_real_mcp_tools():
-    text = (ROOT / "skills" / "using-cocoa" / "SKILL.md").read_text()
-    for tool in ("build_graph_tool", "blast_radius_tool", "service_graph_tool",
-                 "data_access_tool", "query_subgraph_tool"):
-        assert tool in text, f"using-cocoa must name the real tool {tool}"
+def test_skills_only_name_real_mcp_tools():
+    """Any *_tool token mentioned in ANY skill must be a real registered tool."""
+    import re
+    real = {"build_graph_tool", "blast_radius_tool", "service_graph_tool",
+            "data_access_tool", "query_subgraph_tool"}
+    for skill_dir in (ROOT / "skills").iterdir():
+        text = (skill_dir / "SKILL.md").read_text()
+        named = set(re.findall(r"\b([a-z_]+_tool)\b", text))
+        assert named <= real, f"{skill_dir.name} names unknown tools: {named - real}"
+        assert re.search(r"`build_graph`", text) is None, f"{skill_dir.name} names bare build_graph"
+    # the entry skill must still name all five
+    entry = (ROOT / "skills" / "using-cocoa" / "SKILL.md").read_text()
+    assert real <= set(re.findall(r"\b([a-z_]+_tool)\b", entry))
 
 
 def test_process_skills_frontmatter():
