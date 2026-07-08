@@ -1,0 +1,14 @@
+{
+  "name": "cocoa",
+  "displayName": "COCOA — Code Context Agent",
+  "description": "Precise static system graphs of polyglot, k8s-native codebases — code + RPC topology + data access — with provenance-tagged cross-service blast radius. Powered by CLDK.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Rahul Krishna",
+    "email": "i.m.ralk@gmail.com"
+  },
+  "homepage": "https://github.com/codellm-devkit/cocoa",
+  "repository": "https://github.com/codellm-devkit/cocoa",
+  "license": "MIT",
+  "keywords": ["static-analysis", "system-graph", "blast-radius", "call-graph", "mcp", "cldk"]
+}
