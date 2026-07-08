@@ -8,7 +8,8 @@ license = { text = "MIT" }
 authors = [{ name = "Rahul Krishna", email = "i.m.ralk@gmail.com" }]
 keywords = ["static-analysis", "mcp", "code-analysis", "call-graph", "cldk"]
 dependencies = [
-    "cldk>=1.4.0,<2",
+    # pinned: the Docker jar workaround (python-sdk#236) hardcodes 1.4.0's layout
+    "cldk==1.4.0",
     "pydantic>=2.10.6,<3",
     "fastmcp>=2.5.1",
     "mcp>=1.9.1",

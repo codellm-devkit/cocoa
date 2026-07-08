@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "cocoa",
-      "source": ".",
+      "source": "./",
       "description": "Precise static system graphs and provenance-tagged blast radius for polyglot codebases."
     }
   ]
