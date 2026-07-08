@@ -80,7 +80,7 @@ def from_java(dump: dict, service: str) -> ServiceFacts:
         s, t = _java_endpoint(e.get("source", {})), _java_endpoint(e.get("target", {}))
         if s and t:
             sid, tid = _fid(service, s), _fid(service, t)
-            if sid in out.functions:
+            if sid in out.functions and tid in out.functions:
                 out.call_edges.append((sid, tid))
     return out
 

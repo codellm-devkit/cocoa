@@ -21,7 +21,14 @@ JAVA_DUMP = {
                                 "callee_signature": "get(String)",
                                 "start_line": 12,
                             }],
-                        }
+                        },
+                        "lookup(String)": {
+                            "signature": "lookup(String)",
+                            "code": "return cache.get(id);",
+                            "start_line": 22, "end_line": 24,
+                            "annotations": [],
+                            "call_sites": [],
+                        },
                     },
                 }
             }
@@ -62,6 +69,39 @@ PY_ENVELOPE = {
         },
         "call_graph": [],
     },
+}
+
+TS_DUMP = {
+    "symbol_table": {
+        "server.js": {
+            "module_name": "server",
+            "functions": {
+                "server.js:convert(call, cb)": {
+                    "name": "convert",
+                    "signature": "server.js:convert(call, cb)",
+                    "start_line": 10, "end_line": 30,
+                    "decorators": [],
+                    "call_sites": [{
+                        "method_name": "getSupportedCurrencies",
+                        "receiver_expr": "client", "receiver_type": "",
+                        "argument_types": [], "callee_signature": "", "start_line": 12,
+                    }],
+                }
+            },
+            "classes": {
+                "Handler": {"methods": {"server.js:Handler.run()": {
+                    "name": "run", "signature": "server.js:Handler.run()",
+                    "start_line": 40, "end_line": 44, "decorators": [], "call_sites": [],
+                }}}
+            },
+        }
+    },
+    "call_graph": [
+        {"source": "server.js:convert(call, cb)", "target": "server.js:Handler.run()",
+         "type": "CALL_DEP", "weight": 1, "provenance": ["tsc"]},
+        {"source": "server.js:convert(call, cb)", "target": "external.thing()",
+         "type": "CALL_DEP", "weight": 1, "provenance": ["tsc"]},
+    ],
 }
 
 GO_RAW = {
@@ -119,3 +159,31 @@ def test_go_adapter_resolves_identity_edges():
     assert src in f.functions
     assert f.call_edges == []  # target renderCart not in symbol table -> dropped
     assert f.call_sites[0].callee_hint == "pb.CartServiceClient.GetCart"
+
+
+def test_typescript_adapter_covers_functions_methods_and_drops_external_edges():
+    from cocoa.system.facts import from_typescript
+    f = from_typescript(TS_DUMP, "currencyservice")
+    cid = "fn:currencyservice/server.js:convert(call, cb)"
+    mid = "fn:currencyservice/server.js:Handler.run()"
+    assert {cid, mid} <= set(f.functions)
+    assert f.call_edges == [(cid, mid)]          # external.thing() edge dropped
+    assert f.call_sites[0].method_name == "getSupportedCurrencies"
+
+
+def test_java_raw_endpoint_shape_resolves():
+    from copy import deepcopy
+    dump = deepcopy(JAVA_DUMP)
+    dump["call_graph"] = [{
+        "source": {"type_declaration": "hipstershop.AdService", "signature": "getAds(String)"},
+        "target": {"type_declaration": "hipstershop.AdService", "signature": "lookup(String)"},
+        "type": "CALL_DEP", "weight": "1",
+    }]
+    f = from_java(dump, "adservice")
+    assert f.call_edges == [("fn:adservice/hipstershop.AdService.getAds(String)",
+                             "fn:adservice/hipstershop.AdService.lookup(String)")]
+
+
+def test_python_adapter_accepts_unenveloped_dict():
+    f = from_python(PY_ENVELOPE["application"], "emailservice")
+    assert "fn:emailservice/can://python/app/email_server.py/SendOrderConfirmation(req)" in f.functions
