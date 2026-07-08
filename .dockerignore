@@ -1,0 +1,10 @@
+.git
+.cocoa
+.superpowers
+.venv
+__pycache__
+dist
+test
+docs
+demo.tape
+*.gif
