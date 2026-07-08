@@ -29,3 +29,26 @@ def test_marketplace_manifest_lists_cocoa():
     assert mp["name"] == "cocoa"
     assert mp["plugins"][0]["name"] == "cocoa"
     assert mp["plugins"][0]["source"] == "."
+
+
+SKILLS = ["using-cocoa", "grounding-claims", "mapping-a-system", "blast-radius"]
+
+
+def test_skill_frontmatter_follows_superpowers_conventions():
+    for name in ("using-cocoa", "grounding-claims"):
+        fm = _frontmatter(ROOT / "skills" / name / "SKILL.md")
+        assert fm["name"] == name
+        assert fm["description"].startswith("Use when"), f"{name}: description must start 'Use when'"
+
+
+def test_grounding_claims_carries_the_hard_gate():
+    text = (ROOT / "skills" / "grounding-claims" / "SKILL.md").read_text()
+    assert "<HARD-GATE>" in text
+    assert "Never present an `INFERRED` edge as fact." in text
+    assert "DERIVED-STATIC" in text
+
+
+def test_using_cocoa_names_the_other_skills():
+    text = (ROOT / "skills" / "using-cocoa" / "SKILL.md").read_text()
+    for ref in ("cocoa:mapping-a-system", "cocoa:blast-radius", "cocoa:grounding-claims"):
+        assert ref in text
