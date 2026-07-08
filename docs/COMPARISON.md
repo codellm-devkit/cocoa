@@ -8,7 +8,7 @@ thing: **where the edges come from.**
 | | graphify | COCOA |
 |---|---|---|
 | Unit of understanding | a folder of files | a distributed system |
-| Edge derivation | tree-sitter AST + LLM inference | real analyzers (WALA, Jedi, ts-morph, go/types via CLDK) + proto/k8s stitching |
+| Edge derivation | tree-sitter AST for code (deterministic); LLM inference for docs/PDFs/images | real analyzers (WALA, Jedi, ts-morph, go/types via CLDK) + proto/k8s stitching |
 | Edge provenance | `EXTRACTED` / `INFERRED` / `AMBIGUOUS` | `DERIVED-STATIC` / `INFERRED` (labeled fallback only) |
 | Cross-language links | inferred by the model | derived: proto stubs ↔ handlers ↔ k8s wiring, with anchor-exclusivity and boundary-matching to prevent false edges |
 | Databases | absent | first-class: Redis ops, SQL tables, ORM mappings as graph nodes/edges |

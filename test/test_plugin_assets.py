@@ -153,3 +153,9 @@ def test_comparison_is_provenance_led():
     text = (ROOT / "docs" / "COMPARISON.md").read_text()
     assert "graphify" in text.lower()
     assert "AMBIGUOUS" in text and "DERIVED-STATIC" in text
+
+
+def test_demo_tape_mandates_warm_cache_protocol():
+    text = (ROOT / "demo.tape").read_text()
+    assert "RECORDING PROTOCOL" in text
+    assert "cold run" in text
