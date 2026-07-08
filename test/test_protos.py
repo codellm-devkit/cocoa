@@ -57,3 +57,17 @@ def test_field_reachability_walks_message_containment():
     hits = rpcs_touching_field(m, "hipstershop.CartItem.quantity")
     assert ("hipstershop.CartService", "GetCart") in hits
     assert ("hipstershop.CartService", "AddItem") in hits
+
+
+def test_nested_message_fields_do_not_bleed_into_parent():
+    m = parse_proto('syntax = "proto3";\npackage p;\nmessage Outer { message Inner { string x = 1; } Inner inner_field = 2; string y = 3; }')
+    assert [f.name for f in m.messages["p.Outer"].fields] == ["inner_field", "y"]
+    assert [f.name for f in m.messages["p.Inner"].fields] == ["x"]
+
+
+def test_parse_proto_files_merges_multiple_files(tmp_path):
+    a = tmp_path / "a.proto"; a.write_text('package pa;\nservice S { rpc R(M) returns (M) {} }\nmessage M { string x = 1; }')
+    b = tmp_path / "b.proto"; b.write_text('package pb;\nmessage N { int32 y = 1; }')
+    from cocoa.system.protos import parse_proto_files
+    merged = parse_proto_files([a, b])
+    assert "pa.S" in merged.services and "pa.M" in merged.messages and "pb.N" in merged.messages

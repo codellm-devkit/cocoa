@@ -66,6 +66,20 @@ def _qualify(name: str, package: str) -> str:
     return f"{package}.{name}"
 
 
+_NESTED_BLOCK = re.compile(r"\b(?:message|enum)\s+\w+\s*\{")
+
+
+def _strip_nested_blocks(body: str) -> str:
+    """Splice out nested message/enum sub-blocks so their fields don't leak into the parent.
+
+    oneof blocks are deliberately kept — their members are real parent fields.
+    """
+    while (m := _NESTED_BLOCK.search(body)) is not None:
+        close = _matching_brace(body, m.end() - 1)
+        body = body[: m.start()] + body[close + 1:]
+    return body
+
+
 def parse_proto(text: str) -> ProtoModel:
     text = _COMMENT.sub("", text)
     pkg_m = _PACKAGE.search(text)
@@ -86,7 +100,7 @@ def parse_proto(text: str) -> ProtoModel:
             model.services[fqn] = svc
         else:
             msg = ProtoMessage(name=fqn)
-            for f in _FIELD.finditer(body):
+            for f in _FIELD.finditer(_strip_nested_blocks(body)):
                 ftype = f.group(2)
                 if ftype in ("option", "reserved", "oneof", "map", "enum", "message"):
                     continue
