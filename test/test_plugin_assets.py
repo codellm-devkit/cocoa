@@ -52,3 +52,10 @@ def test_using_cocoa_names_the_other_skills():
     text = (ROOT / "skills" / "using-cocoa" / "SKILL.md").read_text()
     for ref in ("cocoa:mapping-a-system", "cocoa:blast-radius", "cocoa:grounding-claims"):
         assert ref in text
+
+
+def test_using_cocoa_names_real_mcp_tools():
+    text = (ROOT / "skills" / "using-cocoa" / "SKILL.md").read_text()
+    for tool in ("build_graph_tool", "blast_radius_tool", "service_graph_tool",
+                 "data_access_tool", "query_subgraph_tool"):
+        assert tool in text, f"using-cocoa must name the real tool {tool}"

@@ -23,7 +23,7 @@ files gives you an impression; the graph gives you derived facts with provenance
    - No, or the code changed meaningfully since it was built → use
      **cocoa:mapping-a-system** to build/refresh it first.
 2. Query it:
-   - MCP server available (`cocoa` tools visible): use `build_graph`,
+   - MCP server available (`cocoa` tools visible): use `build_graph_tool`,
      `service_graph_tool`, `data_access_tool`, `blast_radius_tool`,
      `query_subgraph_tool`.
    - No MCP: use the CLI — `cocoa map -p <root>`, `cocoa blast -p <root>

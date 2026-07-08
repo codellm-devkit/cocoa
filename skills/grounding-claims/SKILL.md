@@ -15,20 +15,21 @@ say so. Do not answer system-impact questions from raw file reading when a
 system graph exists or can be built.
 </HARD-GATE>
 
-## Provenance vocabulary
+## Provenance vocabulary (and annotations)
 
 - `DERIVED-STATIC` — produced by a real analyzer, the proto/wiring stitcher, or a
   datastore extractor. Report as fact.
 - `INFERRED` — name-plus-wiring fallback or ambiguous evidence (edges carry
   `ambiguous=true` when applicable). Report as "likely/inferred", never as fact.
-- `DECLARED-UNUSED` — an RPC declared in a proto with no derived caller. It is a
-  *candidate* dead RPC, not proof.
+- `DECLARED-UNUSED` — a node *annotation* (not an edge provenance): an RPC declared
+  in a proto with no derived caller. A *candidate* dead RPC, not proof.
 
 ## Disclosure duties (all mandatory)
 
-1. **Skips:** if the graph's `skipped` list is non-empty, your answer covers only the
-   analyzed services — name the skipped ones and the reason (e.g. "cartservice (C#)
-   not analyzed — analyzer pending"). An impact answer that ignores skips is wrong.
+1. **Skips:** if the graph's `skipped` list is non-empty (also listed in
+   `.cocoa/SYSTEM_REPORT.md`), your answer covers only the analyzed services — name
+   the skipped ones and the reason (e.g. "cartservice (C#) not analyzed — analyzer
+   pending"). An impact answer that ignores skips is wrong.
 2. **Truncation:** MCP tools return `truncated` + `total_*` fields. If `truncated` is
    true, state the total and that you're showing a subset.
 3. **Depth semantics:** blast-radius `depth` is the strongest path's depth; the
