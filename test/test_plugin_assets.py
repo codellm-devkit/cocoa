@@ -105,3 +105,16 @@ def test_mcp_config_launches_cocoa_serve():
     assert server["command"] == "uvx"
     assert server["args"][-3:] == ["serve", "-p", "."]
     assert "git+https://github.com/codellm-devkit/cocoa" in " ".join(server["args"])
+
+
+def test_blast_command_infers_by_prefix_and_handles_ambiguity():
+    text = (ROOT / "commands" / "blast.md").read_text()
+    for prefix in ("`fld:`", "`fn:`", "`tbl:`", "`key:`"):
+        assert prefix in text
+    assert "ambiguous" in text and "retry" in text
+
+
+def test_demo_command_distinguishes_go_and_csharp_skips():
+    text = (ROOT / "commands" / "demo.md").read_text()
+    assert "CODEANALYZER_GO_BIN" in text
+    assert "codeanalyzer-dotnet" in text
