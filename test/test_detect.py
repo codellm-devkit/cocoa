@@ -53,6 +53,14 @@ def test_unknown_language_service_with_dockerfile_is_recorded(tmp_path: Path):
     assert "docs" not in by_name
 
 
+def test_nested_csproj_detects_csharp(tmp_path: Path):
+    _mk(tmp_path, "src/cartservice/src/cartservice.csproj", "<Project/>")
+    _mk(tmp_path, "src/cartservice/Dockerfile", "FROM dotnet")
+    d = detect(tmp_path)
+    by_name = {s.name: s.language for s in d.services}
+    assert by_name["cartservice"] == "csharp"
+
+
 def test_hidden_dirs_excluded_from_all_discovery(tmp_path: Path):
     _mk(tmp_path, ".terraform/modules/x.proto", 'syntax = "proto3";')
     _mk(tmp_path, ".terraform/modules/dep.yaml", "kind: Deployment")

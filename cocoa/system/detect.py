@@ -27,7 +27,7 @@ def _language_of(d: Path) -> str | None:
         return "go"
     if (d / "pom.xml").exists() or (d / "build.gradle").exists() or (d / "build.gradle.kts").exists():
         return "java"
-    if any(d.glob("*.csproj")):
+    if any(d.glob("*.csproj")) or any(d.glob("src/*.csproj")):
         return "csharp"
     if (d / "package.json").exists():
         return "typescript"
