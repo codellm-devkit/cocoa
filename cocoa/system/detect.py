@@ -35,7 +35,20 @@ def _language_of(d: Path) -> str | None:
         return "python"
     if any(d.glob("*.py")):
         return "python"
+    if (
+        (d / "Dockerfile").exists()
+        or (d / "Cargo.toml").exists()
+        or (d / "Gemfile").exists()
+        or (d / "composer.json").exists()
+        or any(d.glob("*.sln"))
+    ):
+        return "unknown"
     return None
+
+
+def _excluded(p: Path, root: Path) -> bool:
+    rel_parts = p.relative_to(root).parts
+    return any(part in _SKIP_DIRS or part.startswith(".") for part in rel_parts)
 
 
 def detect(root: Path) -> DetectedSystem:
@@ -61,21 +74,21 @@ def detect(root: Path) -> DetectedSystem:
             out.services.append(DetectedService(name=root.name, path=str(root), language=lang))
 
     for p in sorted(root.rglob("*.proto")):
-        if not _SKIP_DIRS.intersection(p.parts):
+        if not _excluded(p, root):
             out.proto_files.append(str(p))
 
     manifest_dirs: set[str] = set()
     for p in sorted(root.rglob("*.yaml")) + sorted(root.rglob("*.yml")):
-        if _SKIP_DIRS.intersection(p.parts):
+        if _excluded(p, root):
             continue
         if p.name in ("docker-compose.yml", "docker-compose.yaml", "compose.yaml"):
             out.compose_files.append(str(p))
             continue
         try:
-            head = p.read_text(encoding="utf-8", errors="replace")[:4000]
+            text = p.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        if "kind: Deployment" in head or "kind: StatefulSet" in head:
+        if "kind: Deployment" in text or "kind: StatefulSet" in text or "kind: DaemonSet" in text:
             manifest_dirs.add(str(p.parent))
     out.manifest_dirs = sorted(manifest_dirs)
     return out

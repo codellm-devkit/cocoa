@@ -39,3 +39,31 @@ def test_single_service_repo_detects_root_itself(tmp_path: Path):
     assert len(d.services) == 1
     assert d.services[0].language == "python"
     assert d.services[0].name == tmp_path.name
+
+
+def test_unknown_language_service_with_dockerfile_is_recorded(tmp_path: Path):
+    _mk(tmp_path, "src/rustservice/Cargo.toml", "[package]")
+    _mk(tmp_path, "src/rustservice/Dockerfile", "FROM rust")
+    _mk(tmp_path, "src/goservice/go.mod", "module g")
+    _mk(tmp_path, "docs/readme.md", "# docs")
+    d = detect(tmp_path)
+    by_name = {s.name: s.language for s in d.services}
+    assert by_name["rustservice"] == "unknown"
+    assert by_name["goservice"] == "go"
+    assert "docs" not in by_name
+
+
+def test_hidden_dirs_excluded_from_all_discovery(tmp_path: Path):
+    _mk(tmp_path, ".terraform/modules/x.proto", 'syntax = "proto3";')
+    _mk(tmp_path, ".terraform/modules/dep.yaml", "kind: Deployment")
+    _mk(tmp_path, "protos/real.proto", 'syntax = "proto3";')
+    d = detect(tmp_path)
+    assert [Path(p).name for p in d.proto_files] == ["real.proto"]
+    assert d.manifest_dirs == []
+
+
+def test_large_combined_manifest_detected_past_4k(tmp_path: Path):
+    pad = "# " + "x" * 5000 + "\n"
+    _mk(tmp_path, "k8s/all.yaml", pad + "kind: Deployment\nmetadata: {name: svc}\n")
+    d = detect(tmp_path)
+    assert any(Path(m).name == "k8s" for m in d.manifest_dirs)
