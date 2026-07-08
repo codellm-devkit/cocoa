@@ -21,12 +21,16 @@ class Workload(BaseModel):
 def _workload_from_deployment(doc: dict) -> Workload | None:
     try:
         name = doc["metadata"]["name"]
-        containers = doc["spec"]["template"]["spec"]["containers"]
+        containers = doc["spec"]["template"]["spec"]["containers"] or []
     except (KeyError, TypeError):
         return None
+    if not isinstance(containers, list):
+        containers = []
     env: dict[str, str] = {}
     image = None
     for c in containers:
+        if not isinstance(c, dict):
+            continue
         image = image or c.get("image")
         for e in c.get("env") or []:
             if "name" in e and isinstance(e.get("value"), str):
@@ -54,31 +58,41 @@ def _render(cmd: list[str], cwd: Path) -> str:
 
 def parse_k8s_dir(path: Path) -> list[Workload]:
     path = Path(path)
-    workloads: list[Workload] = []
+    raw: list[Workload] = []
     for f in sorted(path.rglob("*.yaml")) + sorted(path.rglob("*.yml")):
         try:
-            workloads.extend(parse_k8s_documents(f.read_text(encoding="utf-8", errors="replace")))
+            raw.extend(parse_k8s_documents(f.read_text(encoding="utf-8", errors="replace")))
         except yaml.YAMLError:
             continue
+    rendered: list[Workload] = []
     if (path / "Chart.yaml").exists() and shutil.which("helm"):
-        workloads.extend(parse_k8s_documents(_render(["helm", "template", "."], path)))
+        rendered.extend(parse_k8s_documents(_render(["helm", "template", "."], path)))
     if (path / "kustomization.yaml").exists() and shutil.which("kubectl"):
-        workloads.extend(parse_k8s_documents(_render(["kubectl", "kustomize", "."], path)))
+        rendered.extend(parse_k8s_documents(_render(["kubectl", "kustomize", "."], path)))
     dedup: dict[str, Workload] = {}
-    for w in workloads:
+    for w in rendered + raw:  # rendered output wins over raw chart templates
         dedup.setdefault(w.name, w)
     return list(dedup.values())
 
 
 def parse_compose(path: Path) -> list[Workload]:
-    doc = yaml.safe_load(Path(path).read_text(encoding="utf-8", errors="replace")) or {}
+    try:
+        doc = yaml.safe_load(Path(path).read_text(encoding="utf-8", errors="replace")) or {}
+    except yaml.YAMLError:
+        return []
+    if not isinstance(doc, dict):
+        return []
     out: list[Workload] = []
     for name, svc in (doc.get("services") or {}).items():
+        if not isinstance(svc, dict):
+            continue
         raw = svc.get("environment") or {}
         if isinstance(raw, list):
             env = dict(item.split("=", 1) for item in raw if "=" in item)
-        else:
+        elif isinstance(raw, dict):
             env = {k: str(v) for k, v in raw.items() if v is not None}
+        else:
+            env = {}
         out.append(Workload(name=name, image=svc.get("image"), env=env))
     return out
 
