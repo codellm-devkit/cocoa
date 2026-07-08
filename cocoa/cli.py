@@ -1,7 +1,6 @@
 """COCOA CLI: map | blast (serve and demo are registered by later tasks)."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -33,7 +32,7 @@ def map(
 ):
     """Build the system graph and write .cocoa/ artifacts."""
     graph = build_system_graph(project_path, cache_dir=cache_dir)
-    paths = write_artifacts(graph, Path(project_path) / ARTIFACT_DIR)
+    paths = write_artifacts(graph, project_path / ARTIFACT_DIR)
     services = sorted({n.service for n in graph.nodes if n.service})
     typer.echo(f"services analyzed: {', '.join(services) or '(none)'}")
     typer.echo(f"nodes: {len(graph.nodes)}  edges: {len(graph.edges)}  "
@@ -57,8 +56,9 @@ def blast(
     if not gp.exists():
         typer.echo("no system graph found — run `cocoa map -p <path>` first", err=True)
         raise typer.Exit(code=1)
+    graph = SystemGraph.load(gp)
     try:
-        result = blast_radius(SystemGraph.load(gp), target, kind, max_depth=depth)
+        result = blast_radius(graph, target, kind, max_depth=depth)
     except ValueError as e:
         typer.echo(str(e), err=True)
         raise typer.Exit(code=1)
