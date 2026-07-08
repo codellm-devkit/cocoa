@@ -1,4 +1,4 @@
-"""COCOA CLI: map | blast | serve (demo is registered by a later task)."""
+"""COCOA CLI: map | blast | serve | demo."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -79,6 +79,26 @@ def serve(project_path: _ProjectOpt):
     from cocoa.server import create_server
 
     create_server(project_path).run()
+
+
+@app.command()
+def demo(
+    workdir: Annotated[Optional[Path], typer.Option(help="Where to clone the fixture")] = None,
+):
+    """Run the Online Boutique flagship demo (fetch -> map -> blast -> headline)."""
+    from cocoa.system.demo import DEMO_KIND, DEMO_TARGET, run_demo
+
+    out = run_demo(workdir=workdir)
+    graph, result = out["graph"], out["blast"]
+    typer.echo(f"system graph: {len(graph.nodes)} nodes, {len(graph.edges)} edges")
+    for s in graph.skipped:
+        typer.echo(f"  skipped {s.service} ({s.language}): {s.reason}")
+    typer.echo(f"blast({DEMO_TARGET}, {DEMO_KIND}):")
+    for svc, n in sorted(result.by_service.items()):
+        typer.echo(f"  {svc}: {n} impacted call sites/functions")
+    ratio = out["naive_tokens"] / max(out["cocoa_tokens"], 1)
+    typer.echo(f"tokens (est.): naive read-everything ≈ {out['naive_tokens']:,} "
+               f"vs cocoa answer ≈ {out['cocoa_tokens']:,}  (~{ratio:.0f}x)")
 
 
 if __name__ == "__main__":
