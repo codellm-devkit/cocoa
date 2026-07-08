@@ -6,7 +6,8 @@ import json
 from fastmcp import Context
 
 from cocoa.system.blast import blast_radius
-from cocoa.system.models import EdgeKind, NodeKind, Provenance
+from cocoa.system.models import EdgeKind, NodeKind
+from cocoa.system.topology import service_rpc_edges
 
 
 def _state(ctx: Context):
@@ -50,26 +51,11 @@ async def service_graph_tool(
 ) -> str:
     """Cross-service RPC topology rolled up to service level (data edges: data_access_tool)."""
     graph = _state(ctx).graph()
-    hosts = {e.target: e.source.removeprefix("svc:")
-             for e in graph.edges if e.kind == EdgeKind.HOSTS}
-    fn_svc = {n.id: n.service for n in graph.nodes if n.kind == NodeKind.FUNCTION}
-    handler_svc: dict[str, tuple[str | None, Provenance]] = {}
-    for e in graph.edges:
-        if e.kind == EdgeKind.HANDLES:
-            handler_svc[e.source] = (fn_svc.get(e.target), e.provenance)
-    rollup = []
-    for e in graph.edges:
-        if e.kind != EdgeKind.RPC_CALLS:
-            continue
-        c, prov = fn_svc.get(e.source), e.provenance
-        h = hosts.get(e.target)
-        if not h:  # HANDLES fallback, as in report.py/htmlmap.py
-            h, h_prov = handler_svc.get(e.target, (None, None))
-            if h and Provenance.INFERRED in (prov, h_prov):
-                prov = Provenance.INFERRED  # compound across the fallback hop
-        if c and h and (service is None or service in (c, h)):
-            rollup.append({"client": c, "server": h, "rpc": e.target,
-                           "provenance": prov.value})
+    rollup = [
+        {"client": t.client, "server": t.server, "rpc": t.rpc, "provenance": t.provenance.value}
+        for t in service_rpc_edges(graph)
+        if service is None or service in (t.client, t.server)
+    ]
     return json.dumps({"service": service, "rpc_edges": rollup[:limit],
                        "total_edges": len(rollup), "truncated": len(rollup) > limit})
 

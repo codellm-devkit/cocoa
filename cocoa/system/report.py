@@ -2,31 +2,14 @@
 from __future__ import annotations
 
 from cocoa.system.blast import GraphIndex
-from cocoa.system.models import EdgeKind, NodeKind, Provenance, SystemGraph
+from cocoa.system.models import EdgeKind, NodeKind, SystemGraph
+from cocoa.system.topology import service_rpc_edges
 
 
-def _service_topology(graph: SystemGraph, idx: GraphIndex) -> list[str]:
-    """'client → host' lines derived from RPC_CALLS + HOSTS edges (HANDLES fallback)."""
-    hosts = {e.target: e.source.removeprefix("svc:")
-             for e in graph.edges if e.kind == EdgeKind.HOSTS}
-    handler_svc: dict[str, tuple[str | None, Provenance]] = {}
-    for e in graph.edges:
-        if e.kind == EdgeKind.HANDLES:
-            fn = idx.nodes.get(e.target)
-            handler_svc[e.source] = (fn.service if fn else None, e.provenance)
-    lines = set()
-    for e in graph.edges:
-        if e.kind != EdgeKind.RPC_CALLS:
-            continue
-        client = idx.nodes[e.source].service if e.source in idx.nodes else None
-        prov = e.provenance
-        host = hosts.get(e.target)
-        if not host:
-            host, h_prov = handler_svc.get(e.target, (None, None))
-            if host and Provenance.INFERRED in (prov, h_prov):
-                prov = Provenance.INFERRED  # compound across the fallback hop
-        if client and host and client != host:
-            lines.add(f"- {client} → {host}  (`{e.target}`, {prov.value})")
+def _service_topology(graph: SystemGraph) -> list[str]:
+    """'client → host' lines derived from the shared service-level RPC rollup."""
+    lines = {f"- {t.client} → {t.server}  (`{t.rpc}`, {t.provenance.value})"
+              for t in service_rpc_edges(graph)}
     return sorted(lines)
 
 
@@ -45,7 +28,7 @@ def render_report(graph: SystemGraph) -> str:
                   if n.kind == NodeKind.FUNCTION and n.service == name)
         out.append(f"- **{name}** ({s.attrs.get('language', '?')}) — {fns} functions")
     out += ["", "## Cross-service topology", ""]
-    out += _service_topology(graph, idx) or ["- (no RPC edges derived)"]
+    out += _service_topology(graph) or ["- (no RPC edges derived)"]
     out += ["", "## Data access", ""]
     for e in sorted(data_edges, key=lambda e: (e.target, e.source))[:200]:
         svc = idx.nodes[e.source].service if e.source in idx.nodes else "?"
