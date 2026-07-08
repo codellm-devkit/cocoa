@@ -1,0 +1,41 @@
+name: test
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 6 * * *"   # nightly strict e2e
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --all-groups
+      - run: uv run pytest -v
+
+  e2e:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - name: Build codeanalyzer-go (unreleased; codeanalyzer-go#5)
+        run: |
+          git clone --depth 1 --branch feat/initial-implementation \
+            https://github.com/codellm-devkit/codeanalyzer-go /tmp/cango
+          (cd /tmp/cango && go build -o /usr/local/bin/codeanalyzer-go ./cmd/codeanalyzer)
+      - run: uv sync --all-groups
+      - name: Jar workaround (python-sdk#236)
+        run: |
+          JAR_DIR="$(uv run python -c 'import cldk.analysis.java.codeanalyzer as m, pathlib; print(pathlib.Path(m.__file__).parent / "jar")')"
+          mkdir -p "${JAR_DIR}"
+          curl -fsSL -o "${JAR_DIR}/codeanalyzer-2.4.1.jar" \
+            "https://github.com/codellm-devkit/codeanalyzer-java/releases/download/v2.4.1/codeanalyzer-2.4.1.jar"
+      - name: Strict e2e (launch gate)
+        run: uv run pytest -m e2e -v
