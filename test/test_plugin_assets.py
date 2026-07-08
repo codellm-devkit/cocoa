@@ -31,9 +31,6 @@ def test_marketplace_manifest_lists_cocoa():
     assert mp["plugins"][0]["source"] == "."
 
 
-SKILLS = ["using-cocoa", "grounding-claims", "mapping-a-system", "blast-radius"]
-
-
 def test_skill_frontmatter_follows_superpowers_conventions():
     for name in ("using-cocoa", "grounding-claims"):
         fm = _frontmatter(ROOT / "skills" / name / "SKILL.md")
@@ -54,8 +51,36 @@ def test_using_cocoa_names_the_other_skills():
         assert ref in text
 
 
-def test_using_cocoa_names_real_mcp_tools():
-    text = (ROOT / "skills" / "using-cocoa" / "SKILL.md").read_text()
-    for tool in ("build_graph_tool", "blast_radius_tool", "service_graph_tool",
-                 "data_access_tool", "query_subgraph_tool"):
-        assert tool in text, f"using-cocoa must name the real tool {tool}"
+def test_skills_only_name_real_mcp_tools():
+    """Any *_tool token mentioned in ANY skill must be a real registered tool."""
+    import re
+    real = {"build_graph_tool", "blast_radius_tool", "service_graph_tool",
+            "data_access_tool", "query_subgraph_tool"}
+    for skill_dir in (ROOT / "skills").iterdir():
+        text = (skill_dir / "SKILL.md").read_text()
+        named = set(re.findall(r"\b([a-z_]+_tool)\b", text))
+        assert named <= real, f"{skill_dir.name} names unknown tools: {named - real}"
+        assert re.search(r"`build_graph`", text) is None, f"{skill_dir.name} names bare build_graph"
+    # the entry skill must still name all five
+    entry = (ROOT / "skills" / "using-cocoa" / "SKILL.md").read_text()
+    assert real <= set(re.findall(r"\b([a-z_]+_tool)\b", entry))
+
+
+def test_process_skills_frontmatter():
+    for name in ("mapping-a-system", "blast-radius"):
+        fm = _frontmatter(ROOT / "skills" / name / "SKILL.md")
+        assert fm["name"] == name
+        assert fm["description"].startswith("Use when")
+
+
+def test_blast_radius_documents_kinds_and_provenance():
+    text = (ROOT / "skills" / "blast-radius" / "SKILL.md").read_text()
+    for kind in ("proto-field", "rpc", "function", "table", "redis-key"):
+        assert f"`{kind}`" in text
+    assert "cocoa:grounding-claims" in text
+
+
+def test_mapping_skill_mandates_skip_review():
+    text = (ROOT / "skills" / "mapping-a-system" / "SKILL.md").read_text()
+    assert "skipped" in text.lower()
+    assert "SYSTEM_REPORT.md" in text
