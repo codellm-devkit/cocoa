@@ -2,7 +2,7 @@ from pathlib import Path
 
 from cocoa.system import build
 from cocoa.system.facts import CallSiteFact, FunctionFact, ServiceFacts
-from cocoa.system.models import EdgeKind, Skipped, SystemGraph
+from cocoa.system.models import EdgeKind, NodeKind, Skipped, SystemGraph
 
 
 def _fake_analyze(system, cache_dir):
@@ -35,6 +35,21 @@ def _repo(tmp_path: Path) -> Path:
     (tmp_path / "src" / "frontend" / "go.mod").write_text("module frontend")
     (tmp_path / "src" / "cartservice").mkdir(parents=True)
     (tmp_path / "src" / "cartservice" / "requirements.txt").write_text("grpcio")
+    (tmp_path / "kubernetes-manifests").mkdir(parents=True)
+    (tmp_path / "kubernetes-manifests" / "frontend.yaml").write_text(
+        "apiVersion: apps/v1\n"
+        "kind: Deployment\n"
+        "metadata: {name: frontend}\n"
+        "spec:\n"
+        "  template:\n"
+        "    spec:\n"
+        "      containers:\n"
+        "        - name: server\n"
+        "          image: frontend:v1\n"
+        "          env:\n"
+        "            - name: CART_SERVICE_ADDR\n"
+        "              value: \"cartservice:7070\"\n"
+    )
     return tmp_path
 
 
@@ -51,6 +66,14 @@ def test_build_assembles_and_annotates(tmp_path: Path, monkeypatch):
     used = next(n for n in g.nodes if n.id == "rpc:hipstershop.CartService/GetCart")
     assert "annotation" not in used.attrs
     assert g.skipped[0].service == "loadgenerator"
+
+
+def test_build_assembles_workload_nodes_and_wiring(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(build, "analyze_system", _fake_analyze)
+    g = build.build_system_graph(_repo(tmp_path))
+    wl = next(n for n in g.nodes if n.id == "wl:frontend")
+    assert wl.kind == NodeKind.K8S_WORKLOAD
+    assert wl.attrs["image"] == "frontend:v1"
 
 
 def test_write_artifacts_persists_graph(tmp_path: Path, monkeypatch):
