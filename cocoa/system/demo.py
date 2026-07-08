@@ -1,7 +1,7 @@
 """The Online Boutique flagship demo: fetch -> map -> blast -> headline."""
 from __future__ import annotations
 
-import json
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -16,11 +16,20 @@ DEMO_KIND = "proto-field"
 
 def _fetch(workdir: Path) -> Path:
     dest = workdir / f"microservices-demo-{DEMO_TAG}"
-    if not dest.exists():
+    if dest.exists():
+        return dest
+    tmp = dest.with_name(dest.name + ".partial")
+    if tmp.exists():
+        shutil.rmtree(tmp)
+    try:
         subprocess.run(
-            ["git", "clone", "--depth", "1", "--branch", DEMO_TAG, DEMO_REPO, str(dest)],
+            ["git", "clone", "--depth", "1", "--branch", DEMO_TAG, DEMO_REPO, str(tmp)],
             check=True, capture_output=True, text=True, timeout=600,
         )
+    except BaseException:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
+    tmp.rename(dest)
     return dest
 
 
@@ -29,11 +38,16 @@ def _naive_tokens(root: Path) -> int:
     exts = {".go", ".py", ".java", ".js", ".ts", ".cs", ".proto"}
     total = 0
     for p in root.rglob("*"):
-        if p.suffix in exts and p.is_file() and "node_modules" not in p.parts:
-            try:
-                total += len(p.read_text(encoding="utf-8", errors="replace"))
-            except OSError:
-                continue
+        if p.suffix not in exts or not p.is_file():
+            continue
+        # honest count: exclude our own artifacts, caches, and vendored deps
+        if any(part.startswith(".") or part == "node_modules"
+               for part in p.relative_to(root).parts[:-1]):
+            continue
+        try:
+            total += len(p.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            continue
     return total // 4
 
 

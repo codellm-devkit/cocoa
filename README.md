@@ -15,5 +15,5 @@ uv run cocoa demo                                   # Online Boutique flagship d
 ```
 
 Requires Docker-less local analyzers today: Java/Python/TypeScript run via CLDK
-automatically; Go needs `codeanalyzer-go` on PATH; C# is recorded as skipped until
-`codeanalyzer-dotnet` ships.
+automatically; Go needs `codeanalyzer-go` on PATH (or pointed to via
+`CODEANALYZER_GO_BIN`); C# is recorded as skipped until `codeanalyzer-dotnet` ships.

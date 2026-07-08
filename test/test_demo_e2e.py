@@ -1,4 +1,5 @@
 import shutil
+from pathlib import Path
 
 import pytest
 
@@ -8,6 +9,30 @@ from cocoa.system.demo import DEMO_REPO, DEMO_TAG, run_demo
 def test_demo_constants_pin_the_fixture():
     assert DEMO_REPO == "https://github.com/GoogleCloudPlatform/microservices-demo"
     assert DEMO_TAG == "v0.10.5"
+
+
+def test_fetch_cleans_up_partial_clone(tmp_path, monkeypatch):
+    import subprocess as sp
+    from cocoa.system import demo
+
+    def fake_run(cmd, **kwargs):
+        Path(cmd[-1]).mkdir(parents=True)          # git created the dir...
+        raise sp.TimeoutExpired(cmd, 600)          # ...then died
+
+    monkeypatch.setattr(demo.subprocess, "run", fake_run)
+    with pytest.raises(sp.TimeoutExpired):
+        demo._fetch(tmp_path)
+    assert list(tmp_path.iterdir()) == []          # no partial dir, no dest
+
+
+def test_naive_tokens_ignores_artifacts_and_hidden_dirs(tmp_path):
+    from cocoa.system.demo import _naive_tokens
+    (tmp_path / "app.py").write_text("x = 1\n" * 100)
+    (tmp_path / ".cocoa").mkdir()
+    (tmp_path / ".cocoa" / "cache.py").write_text("y = 2\n" * 10000)
+    (tmp_path / "node_modules" / "dep").mkdir(parents=True)
+    (tmp_path / "node_modules" / "dep" / "index.js").write_text("z\n" * 10000)
+    assert _naive_tokens(tmp_path) == len(("x = 1\n" * 100)) // 4
 
 
 @pytest.mark.e2e
