@@ -21,3 +21,27 @@ def test_html_is_self_contained():
     assert "<svg" in html and "svc:frontend" in html
     for banned in ("http://", "https://cdn", "<script src"):
         assert banned not in html
+
+
+def test_services_inventory_renders_names_and_counts():
+    md = render_report(_g())
+    assert "- **frontend** (?) — 2 functions" in md
+    assert "- **cartservice** (?) — 2 functions" in md
+    assert "**None**" not in md
+
+
+def test_html_topology_agrees_with_report():
+    html = render_html(_g())
+    assert html.count("<line") == 2  # frontend→cartservice RPC + cartservice→redis READS
+    assert "svc:frontend → svc:cartservice" in html
+
+
+def test_data_access_truncation_is_labeled():
+    from cocoa.system.models import Edge, EdgeKind, Node, NodeKind, Provenance, SystemGraph
+    nodes = [Node(id="svc:s", kind=NodeKind.SERVICE, service="s"),
+             Node(id="tbl:t", kind=NodeKind.TABLE)]
+    nodes += [Node(id=f"fn:s/f{i}", kind=NodeKind.FUNCTION, service="s") for i in range(205)]
+    edges = [Edge(source=f"fn:s/f{i}", target="tbl:t", kind=EdgeKind.READS,
+                  provenance=Provenance.DERIVED_STATIC) for i in range(205)]
+    md = render_report(SystemGraph(root="/x", nodes=nodes, edges=edges))
+    assert "showing first 200 of 205" in md
