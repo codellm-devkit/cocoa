@@ -1,4 +1,4 @@
-"""COCOA CLI: map | blast (serve and demo are registered by later tasks)."""
+"""COCOA CLI: map | blast | serve (demo is registered by a later task)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -71,6 +71,14 @@ def blast(
     for item in result.impacted:
         where = f"{item.file}:{item.line}" if item.file else ""
         typer.echo(f"  [{item.provenance.value}] {item.node_id} {where}")
+
+
+@app.command()
+def serve(project_path: _ProjectOpt):
+    """Start the COCOA MCP server for a project."""
+    from cocoa.server import create_server
+
+    create_server(project_path).run()
 
 
 if __name__ == "__main__":
