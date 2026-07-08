@@ -132,3 +132,30 @@ def test_docker_smoke_builds_and_maps():
         capture_output=True, text=True, timeout=1800,
     )
     assert res.returncode == 0, f"smoke failed:\n{res.stdout}\n{res.stderr}"
+
+
+def test_readme_carries_the_positioning_and_honest_status():
+    text = (ROOT / "README.md").read_text()
+    assert "Graphify indexes files" in text            # the pitch
+    assert "DERIVED-STATIC" in text and "INFERRED" in text
+    assert "docs/INSTALL.md" in text and "docs/COMPARISON.md" in text
+    assert "codeanalyzer-go" in text                   # honest prereq status
+
+
+def test_install_doc_covers_platforms_and_pypi_caveat():
+    text = (ROOT / "docs" / "INSTALL.md").read_text()
+    for platform in ("Claude Code", "Codex", "Cursor", "Docker"):
+        assert platform in text
+    assert "uvx --from git+" in text                   # pre-PyPI install path
+
+
+def test_comparison_is_provenance_led():
+    text = (ROOT / "docs" / "COMPARISON.md").read_text()
+    assert "graphify" in text.lower()
+    assert "AMBIGUOUS" in text and "DERIVED-STATIC" in text
+
+
+def test_demo_tape_mandates_warm_cache_protocol():
+    text = (ROOT / "demo.tape").read_text()
+    assert "RECORDING PROTOCOL" in text
+    assert "cold run" in text
