@@ -84,3 +84,37 @@ def test_mapping_skill_mandates_skip_review():
     text = (ROOT / "skills" / "mapping-a-system" / "SKILL.md").read_text()
     assert "skipped" in text.lower()
     assert "SYSTEM_REPORT.md" in text
+
+
+def test_commands_have_descriptions_and_invoke_skills():
+    expectations = {
+        "map.md": "cocoa:mapping-a-system",
+        "blast.md": "cocoa:blast-radius",
+        "demo.md": "cocoa:grounding-claims",
+    }
+    for fname, skill_ref in expectations.items():
+        path = ROOT / "commands" / fname
+        fm = _frontmatter(path)
+        assert fm.get("description"), f"{fname} missing description"
+        assert skill_ref in path.read_text(), f"{fname} must reference {skill_ref}"
+
+
+def test_mcp_config_launches_cocoa_serve():
+    cfg = json.loads((ROOT / ".mcp.json").read_text())
+    server = cfg["mcpServers"]["cocoa"]
+    assert server["command"] == "uvx"
+    assert server["args"][-3:] == ["serve", "-p", "."]
+    assert "git+https://github.com/codellm-devkit/cocoa" in " ".join(server["args"])
+
+
+def test_blast_command_infers_by_prefix_and_handles_ambiguity():
+    text = (ROOT / "commands" / "blast.md").read_text()
+    for prefix in ("`fld:`", "`fn:`", "`tbl:`", "`key:`"):
+        assert prefix in text
+    assert "ambiguous" in text and "retry" in text
+
+
+def test_demo_command_distinguishes_go_and_csharp_skips():
+    text = (ROOT / "commands" / "demo.md").read_text()
+    assert "CODEANALYZER_GO_BIN" in text
+    assert "codeanalyzer-dotnet" in text
