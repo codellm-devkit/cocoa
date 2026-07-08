@@ -114,5 +114,8 @@ def analyze_system(
             log.info("analyzed %s (%s): %d functions",
                      svc.name, svc.language, len(facts[svc.name].functions))
         except Exception as exc:  # never let one service kill the system pass
-            skipped.append(Skipped(service=svc.name, language=svc.language, reason=str(exc)))
+            detail = (getattr(exc, "stderr", "") or getattr(exc, "stdout", "") or "").strip()
+            reason = f"{exc}: {detail[:500]}" if detail else str(exc)
+            skipped.append(Skipped(service=svc.name, language=svc.language, reason=reason))
+            log.warning("skipped %s (%s): %s", svc.name, svc.language, reason)
     return facts, skipped

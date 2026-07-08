@@ -51,6 +51,20 @@ def test_go_runner_requires_binary(tmp_path: Path, monkeypatch):
         driver._facts_go(svc, tmp_path / "cache")
 
 
+def test_go_subprocess_failure_reason_includes_stderr(tmp_path: Path, monkeypatch):
+    import subprocess as sp
+
+    def fake_run(cmd, **kwargs):
+        raise sp.CalledProcessError(2, cmd, output="", stderr="go build: package broken/x not found")
+
+    monkeypatch.setenv("CODEANALYZER_GO_BIN", "/usr/bin/fake-cango")
+    monkeypatch.setattr(driver.subprocess, "run", fake_run)
+    system = _sys(tmp_path, DetectedService(name="frontend", path=str(tmp_path), language="go"))
+    facts, skipped = driver.analyze_system(system, tmp_path / "cache")
+    assert facts == {}
+    assert "package broken/x not found" in skipped[0].reason
+
+
 @pytest.mark.integration
 def test_real_python_analysis_yields_functions(tmp_path: Path):
     proj = tmp_path / "miniapp"
