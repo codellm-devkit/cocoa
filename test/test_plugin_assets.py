@@ -31,7 +31,7 @@ def test_marketplace_manifest_lists_cocoa():
     mp = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_text())
     assert mp["name"] == "cocoa"
     assert mp["plugins"][0]["name"] == "cocoa"
-    assert mp["plugins"][0]["source"] == "."
+    assert mp["plugins"][0]["source"] == "./"
 
 
 def test_skill_frontmatter_follows_superpowers_conventions():
