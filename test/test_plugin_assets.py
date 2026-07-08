@@ -1,7 +1,10 @@
 """Structural validation for plugin content: manifests, skills, commands."""
 import json
+import shutil
+import subprocess
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -118,3 +121,14 @@ def test_demo_command_distinguishes_go_and_csharp_skips():
     text = (ROOT / "commands" / "demo.md").read_text()
     assert "CODEANALYZER_GO_BIN" in text
     assert "codeanalyzer-dotnet" in text
+
+
+@pytest.mark.docker
+def test_docker_smoke_builds_and_maps():
+    if not shutil.which("docker"):
+        pytest.skip("docker not available")
+    res = subprocess.run(
+        ["bash", str(ROOT / "scripts" / "docker-smoke.sh")],
+        capture_output=True, text=True, timeout=1800,
+    )
+    assert res.returncode == 0, f"smoke failed:\n{res.stdout}\n{res.stderr}"
