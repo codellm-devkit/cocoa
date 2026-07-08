@@ -67,3 +67,73 @@ def test_no_evidence_no_wiring_means_no_client_edge():
     facts["frontend"].call_sites[0].callee_hint = ""
     _, edges = stitch(facts, parse_proto(PROTO), {})
     assert not [e for e in edges if e.kind == EdgeKind.RPC_CALLS]
+
+
+def test_substring_service_names_do_not_cross_match():
+    proto = parse_proto(
+        'syntax = "proto3";\npackage hipstershop;\n'
+        "service CartService { rpc GetCart(Req) returns (Resp) {} }\n"
+        "service ShoppingCartService { rpc GetCart(Req) returns (Resp) {} }\n"
+        "message Req { string x = 1; }\nmessage Resp { string y = 1; }\n"
+    )
+    cid, client_fn = _fn("frontend", "frontend.viewCart(w,r)", "viewCart")
+    frontend = ServiceFacts(
+        service="frontend", language="go", functions={cid: client_fn},
+        call_sites=[CallSiteFact(caller_id=cid, method_name="GetCart",
+                                 receiver_type="pb.ShoppingCartServiceClient",
+                                 callee_hint="pb.ShoppingCartServiceClient.GetCart", line=41)],
+    )
+    _, edges = stitch({"frontend": frontend}, proto, {})
+    rpc_edges = [(e.target, e.provenance) for e in edges if e.kind == EdgeKind.RPC_CALLS]
+    assert rpc_edges == [("rpc:hipstershop.ShoppingCartService/GetCart", Provenance.DERIVED_STATIC)]
+
+
+def test_shared_single_rpc_name_does_not_anchor_ambiguous_handler():
+    proto = parse_proto(
+        'syntax = "proto3";\npackage hipstershop;\n'
+        "service CartService { rpc GetCart(Req) returns (Resp) {} }\n"
+        "service ShoppingCartService { rpc GetCart(Req) returns (Resp) {} }\n"
+        "message Req { string x = 1; }\nmessage Resp { string y = 1; }\n"
+    )
+    hid, handler = _fn("cartsvc", "cart.GetCart(req)", "GetCart")
+    facts = {"cartsvc": ServiceFacts(service="cartsvc", language="python",
+                                     functions={hid: handler})}
+    _, edges = stitch(facts, proto, {})
+    assert not [e for e in edges if e.kind == EdgeKind.HANDLES]
+    assert not [e for e in edges if e.kind == EdgeKind.HOSTS
+                and e.provenance == Provenance.DERIVED_STATIC]
+
+
+def test_two_rpc_matches_anchor_despite_shared_name_elsewhere():
+    proto = parse_proto(
+        'syntax = "proto3";\npackage hipstershop;\n'
+        "service CartService { rpc GetCart(Req) returns (Resp) {} rpc AddItem(Req) returns (Resp) {} }\n"
+        "service ShoppingCartService { rpc GetCart(Req) returns (Resp) {} }\n"
+        "message Req { string x = 1; }\nmessage Resp { string y = 1; }\n"
+    )
+    h1, f1 = _fn("cartsvc", "cart.GetCart(req)", "GetCart")
+    h2, f2 = _fn("cartsvc", "cart.AddItem(req)", "AddItem")
+    facts = {"cartsvc": ServiceFacts(service="cartsvc", language="python",
+                                     functions={h1: f1, h2: f2})}
+    _, edges = stitch(facts, proto, {})
+    handles = {e.target for e in edges if e.kind == EdgeKind.HANDLES
+               and e.source == "rpc:hipstershop.CartService/GetCart"}
+    assert handles == {h1}
+
+
+def test_wiring_fallback_requires_normalized_name_equality():
+    proto = parse_proto(
+        'syntax = "proto3";\npackage hipstershop;\n'
+        "service CartService { rpc GetCart(Req) returns (Resp) {} }\n"
+        "service SmartCartService { rpc Recommend(Req) returns (Resp) {} }\n"
+        "message Req { string x = 1; }\nmessage Resp { string y = 1; }\n"
+    )
+    cid, client_fn = _fn("frontend", "frontend.f()", "f")
+    facts = {
+        "frontend": ServiceFacts(service="frontend", language="go", functions={cid: client_fn}),
+        "cartservice": ServiceFacts(service="cartservice", language="python"),
+    }
+    _, edges = stitch(facts, proto, {"frontend": {"CART_SERVICE_ADDR": "cartservice"}})
+    hosts = {e.target for e in edges if e.kind == EdgeKind.HOSTS}
+    assert "rpc:hipstershop.CartService/GetCart" in hosts
+    assert "rpc:hipstershop.SmartCartService/Recommend" not in hosts
