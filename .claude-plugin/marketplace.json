@@ -1,0 +1,14 @@
+{
+  "name": "cocoa",
+  "owner": {
+    "name": "Rahul Krishna",
+    "email": "i.m.ralk@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "cocoa",
+      "source": ".",
+      "description": "Precise static system graphs and provenance-tagged blast radius for polyglot codebases."
+    }
+  ]
+}
