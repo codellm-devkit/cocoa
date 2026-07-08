@@ -49,6 +49,16 @@ def _repo(tmp_path: Path) -> Path:
         "          env:\n"
         "            - name: CART_SERVICE_ADDR\n"
         "              value: \"cartservice:7070\"\n"
+        "---\n"
+        "apiVersion: apps/v1\n"
+        "kind: Deployment\n"
+        "metadata: {name: cartservice}\n"
+        "spec:\n"
+        "  template:\n"
+        "    spec:\n"
+        "      containers:\n"
+        "        - name: server\n"
+        "          image: cartservice:v1\n"
     )
     return tmp_path
 
@@ -69,11 +79,20 @@ def test_build_assembles_and_annotates(tmp_path: Path, monkeypatch):
 
 
 def test_build_assembles_workload_nodes_and_wiring(tmp_path: Path, monkeypatch):
+    captured = {}
+    real_rpc_addr_targets = build.rpc_addr_targets
+
+    def spy(workloads):
+        captured["targets"] = real_rpc_addr_targets(workloads)
+        return captured["targets"]
+
     monkeypatch.setattr(build, "analyze_system", _fake_analyze)
+    monkeypatch.setattr(build, "rpc_addr_targets", spy)
     g = build.build_system_graph(_repo(tmp_path))
     wl = next(n for n in g.nodes if n.id == "wl:frontend")
     assert wl.kind == NodeKind.K8S_WORKLOAD
     assert wl.attrs["image"] == "frontend:v1"
+    assert captured["targets"] == {"frontend": {"CART_SERVICE_ADDR": "cartservice"}}
 
 
 def test_write_artifacts_persists_graph(tmp_path: Path, monkeypatch):
