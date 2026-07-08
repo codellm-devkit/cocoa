@@ -58,8 +58,17 @@ def build_system_graph(root: Path, cache_dir: Path | None = None) -> SystemGraph
 
 
 def write_artifacts(graph: SystemGraph, out_dir: Path) -> dict[str, Path]:
+    from cocoa.system.htmlmap import render_html
+    from cocoa.system.report import render_report
+
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    graph_path = out_dir / "system-graph.json"
-    graph.save(graph_path)
-    return {"graph": graph_path}
+    paths = {
+        "graph": out_dir / "system-graph.json",
+        "report": out_dir / "SYSTEM_REPORT.md",
+        "html": out_dir / "system-map.html",
+    }
+    graph.save(paths["graph"])
+    paths["report"].write_text(render_report(graph), encoding="utf-8")
+    paths["html"].write_text(render_html(graph), encoding="utf-8")
+    return paths
