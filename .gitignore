@@ -1,0 +1,10 @@
+.superpowers/
+__pycache__/
+*.pyc
+.venv/
+.cocoa/
+.codeanalyzer/
+dist/
+.pytest_cache/
+.coverage
+uv.lock
