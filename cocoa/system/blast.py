@@ -88,11 +88,12 @@ def _seed_functions(idx: GraphIndex, resolved: str, kind: str) -> list[tuple[str
     return seeds
 
 
-def _weaken(a: Provenance, b: Provenance) -> Provenance:
-    return Provenance.INFERRED if Provenance.INFERRED in (a, b) else Provenance.DERIVED_STATIC
+_KNOWN_KINDS = {"proto-field", "rpc", "function", "table", "redis-key"}
 
 
 def blast_radius(graph: SystemGraph, target: str, kind: str, max_depth: int = 25) -> BlastResult:
+    if kind not in _KNOWN_KINDS:
+        raise ValueError(f"unknown blast kind: {kind!r} (expected one of {sorted(_KNOWN_KINDS)})")
     idx = GraphIndex(graph)
     resolved = idx.resolve(target)
     result = BlastResult(target=target, kind=kind)
@@ -101,33 +102,42 @@ def blast_radius(graph: SystemGraph, target: str, kind: str, max_depth: int = 25
     seeds = _seed_functions(idx, resolved, kind)
     result.seeds = sorted({s for s, _ in seeds})
 
-    best: dict[str, tuple[int, Provenance]] = {}
-    frontier: deque[tuple[str, int, Provenance]] = deque(
-        (fn, 0, prov) for fn, prov in seeds
-    )
+    _RANK = {Provenance.DERIVED_STATIC: 0, Provenance.INFERRED: 1}
+    _PROV = {0: Provenance.DERIVED_STATIC, 1: Provenance.INFERRED}
+
+    best: dict[str, tuple[int, int]] = {}  # fn -> (prov_rank, depth), lexicographic best
+    frontier: deque[str] = deque()
+
+    def relax(fn: str, key: tuple[int, int]) -> None:
+        if fn not in best or key < best[fn]:
+            best[fn] = key
+            frontier.append(fn)
+
+    for fn, prov in seeds:
+        relax(fn, (_RANK[prov], 0))
+
     while frontier:
-        fn, depth, prov = frontier.popleft()
-        seen = best.get(fn)
-        if seen is not None and seen[0] <= depth and _weaken(seen[1], prov) == seen[1]:
-            continue
-        best[fn] = (depth, prov if seen is None else _weaken(seen[1], prov))
+        fn = frontier.popleft()
+        rank, depth = best[fn]  # read current label (may have improved since enqueue)
         if depth >= max_depth:
             continue
-        for e in idx.in_edges(fn):          # reverse CALLS: who calls me
+        for e in idx.in_edges(fn):
             if e.kind == EdgeKind.CALLS:
-                frontier.append((e.source, depth + 1, _weaken(prov, e.provenance)))
-            elif e.kind == EdgeKind.HANDLES:  # I'm a handler: hop to my rpc's clients
+                relax(e.source, (max(rank, _RANK[e.provenance]), depth + 1))
+            elif e.kind == EdgeKind.HANDLES:
+                # fn is a handler: hop to its rpc's clients. Two edges compound into
+                # one logical hop (depth + 1 by design — an RPC boundary is one step).
                 for c in idx.in_edges(e.source):
                     if c.kind == EdgeKind.RPC_CALLS:
-                        frontier.append((c.source, depth + 1,
-                                         _weaken(_weaken(prov, e.provenance), c.provenance)))
+                        hop_rank = max(rank, _RANK[e.provenance], _RANK[c.provenance])
+                        relax(c.source, (hop_rank, depth + 1))
 
-    for fn, (depth, prov) in sorted(best.items()):
+    for fn, (rank, depth) in sorted(best.items()):
         node = idx.nodes.get(fn)
         result.impacted.append(ImpactItem(
             node_id=fn, service=node.service if node else None,
             file=node.file if node else None, line=node.line if node else None,
-            provenance=prov, depth=depth,
+            provenance=_PROV[rank], depth=depth,
         ))
         if node and node.service:
             result.by_service[node.service] = result.by_service.get(node.service, 0) + 1

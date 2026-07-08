@@ -58,3 +58,65 @@ def test_inferred_hop_weakens_provenance():
 def test_unknown_target_returns_empty_result():
     r = blast_radius(_g(), "no.such.thing", "function")
     assert r.impacted == [] and r.seeds == []
+
+
+def test_later_weaker_path_does_not_corrupt_strong_result():
+    """Diamond: X has a direct DERIVED path (depth 1) and a longer INFERRED path via M."""
+    nodes = [
+        Node(id="fn:s/seed", kind=N.FUNCTION, service="s"),
+        Node(id="fn:s/X", kind=N.FUNCTION, service="s"),
+        Node(id="fn:s/M", kind=N.FUNCTION, service="s"),
+    ]
+    E = lambda s, t, k, p=P.DERIVED_STATIC: Edge(source=s, target=t, kind=k, provenance=p)
+    g = SystemGraph(root="/x", nodes=nodes, edges=[
+        E("fn:s/X", "fn:s/seed", K.CALLS),                       # strong, depth 1
+        E("fn:s/M", "fn:s/seed", K.CALLS),
+        E("fn:s/X", "fn:s/M", K.CALLS, P.INFERRED),              # weak, depth 2
+    ])
+    r = blast_radius(g, "fn:s/seed", "function")
+    x = next(i for i in r.impacted if i.node_id == "fn:s/X")
+    assert (x.provenance, x.depth) == (P.DERIVED_STATIC, 1)
+
+
+def test_stronger_later_path_upgrades_inferred_result():
+    """X reaches seed via INFERRED depth-1 AND via DERIVED depth-2: strongest path wins, with ITS depth."""
+    nodes = [
+        Node(id="fn:s/seed", kind=N.FUNCTION, service="s"),
+        Node(id="fn:s/X", kind=N.FUNCTION, service="s"),
+        Node(id="fn:s/Y", kind=N.FUNCTION, service="s"),
+    ]
+    E = lambda s, t, k, p=P.DERIVED_STATIC: Edge(source=s, target=t, kind=k, provenance=p)
+    g = SystemGraph(root="/x", nodes=nodes, edges=[
+        E("fn:s/X", "fn:s/seed", K.CALLS, P.INFERRED),
+        E("fn:s/Y", "fn:s/seed", K.CALLS),
+        E("fn:s/X", "fn:s/Y", K.CALLS),
+    ])
+    r = blast_radius(g, "fn:s/seed", "function")
+    x = next(i for i in r.impacted if i.node_id == "fn:s/X")
+    assert (x.provenance, x.depth) == (P.DERIVED_STATIC, 2)
+
+
+def test_cycles_terminate_with_min_depths():
+    nodes = [Node(id=f"fn:s/{n}", kind=N.FUNCTION, service="s") for n in ("seed", "A", "B")]
+    E = lambda s, t: Edge(source=s, target=t, kind=K.CALLS, provenance=P.DERIVED_STATIC)
+    g = SystemGraph(root="/x", nodes=nodes, edges=[
+        E("fn:s/B", "fn:s/seed"), E("fn:s/A", "fn:s/B"), E("fn:s/B", "fn:s/A"),
+    ])
+    r = blast_radius(g, "fn:s/seed", "function")
+    depths = {i.node_id: i.depth for i in r.impacted}
+    assert depths["fn:s/B"] == 1 and depths["fn:s/A"] == 2
+
+
+def test_ambiguous_suffix_resolves_to_nothing():
+    nodes = [Node(id="fn:a/x.go", kind=N.FUNCTION, service="a"),
+             Node(id="fn:b/x.go", kind=N.FUNCTION, service="b")]
+    g = SystemGraph(root="/x", nodes=nodes, edges=[])
+    r = blast_radius(g, "x.go", "function")
+    assert r.seeds == [] and r.impacted == []
+
+
+def test_unknown_kind_raises():
+    import pytest as _pytest
+    g = SystemGraph(root="/x", nodes=[], edges=[])
+    with _pytest.raises(ValueError):
+        blast_radius(g, "anything", "banana")
